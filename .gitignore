@@ -21,3 +21,13 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Google Cloud credentials and sensitive files
+.env
+service-account-*.json
+*.key.json
+*.pem
+
+# Ignore project-specific JSON files
+*.bucket.json
+dale.json
