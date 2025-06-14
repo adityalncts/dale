@@ -31,3 +31,4 @@ service-account-*.json
 # Ignore project-specific JSON files
 *.bucket.json
 dale.json
+service-account-dale.json
