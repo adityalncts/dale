@@ -1,4 +1,5 @@
 // Simple Express server to fetch the latest image from a Google Cloud Storage bucket
+require('dotenv').config();
 const express = require('express');
 const { Storage } = require('@google-cloud/storage');
 const cors = require('cors');
@@ -9,12 +10,13 @@ const port = 5000; // You can change this if needed
 app.use(cors());
 
 // TODO: Replace with your bucket name
-const BUCKET_NAME = 'YOUR_BUCKET_NAME_HERE';
+const BUCKET_NAME = process.env.GCLOUD_BUCKET_NAME;
+const GCLOUD_PROJECT = process.env.GCLOUD_PROJECT;
 // Optional: set a prefix if your images are in a subfolder
 const PREFIX = '';
 
 // Instantiates a client. Make sure GOOGLE_APPLICATION_CREDENTIALS is set
-const storage = new Storage();
+const storage = new Storage({ projectId: GCLOUD_PROJECT });
 
 app.get('/latest-image', async (req, res) => {
   try {
