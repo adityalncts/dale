@@ -1,0 +1,97 @@
+from picamera2 import Picamera2
+from google.cloud import storage
+import os
+import uuid
+import time
+import json
+
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/pi/Documents/dale/service-account-dale.json"
+os.environ["GOOGLE_STORAGE_BUCKET"] = "dale-incoming-images-from-camera"
+os.environ["GOOGLE_CLOUD_PROJECT"] = "uk-con-gcp-sbx-ukat01-012822"
+
+# Google Cloud Storage configuration (environment variables)
+SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+BUCKET_NAME = os.environ.get("GOOGLE_STORAGE_BUCKET")
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT")  # For storage client init
+
+# Initialize Cloud Storage client
+try:
+    if SERVICE_ACCOUNT_FILE:
+        storage_client = storage.Client.from_service_account_json(SERVICE_ACCOUNT_FILE)
+    else:
+        storage_client = storage.Client(project=PROJECT_ID)
+except Exception as e:
+    print(f"Error initializing Storage client: {e}")
+    exit(1)
+
+bucket = storage_client.bucket(BUCKET_NAME)
+
+
+def get_bucket_labels():
+    """Retrieves labels from the bucket."""
+    try:
+        bucket.reload()
+        labels = bucket.labels
+        return labels
+    except Exception as e:
+        print(f"Error getting bucket labels: {e}")
+        return None
+
+
+def capture_and_upload_image(camera_index=0, image_format='.jpg'):
+    """Captures and uploads an image using picamera2."""
+    try:
+        picam2 = Picamera2()
+        picam2.configure(picam2.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
+        picam2.start()
+
+        filename = f"{uuid.uuid4()}{image_format}"
+        local_filepath = f"/tmp/{filename}"
+        picam2.capture_file(local_filepath)
+
+        print(f"Image captured to {local_filepath}")
+
+        blob = bucket.blob(filename)
+        blob.upload_from_filename(local_filepath)
+        print(f"Image uploaded to gs://{BUCKET_NAME}/{filename}")
+
+        os.remove(local_filepath)
+        picam2.stop()
+
+    except Exception as e:
+        print(f"Error capturing and uploading image: {e}")
+
+
+def monitor_and_capture(camera_index=0, image_format=".jpg"):
+    """Monitors bucket labels and captures/uploads images."""
+
+    while True:
+        labels = get_bucket_labels()
+
+        if labels:
+            start_value = labels.get("start")  # Case-insensitive
+            number_value = int(labels.get("number", 0))
+
+            if start_value == "yes":
+                print("Starting image capture...")
+                for _ in range(number_value):
+                    capture_and_upload_image(camera_index, image_format)
+                    time.sleep(2)
+
+                labels["start"] = "no"  # Consistent label update
+                bucket.labels = labels
+                bucket.patch()
+                print("Image capture complete.")
+
+            elif start_value == "no":
+                print("Image capture stopped.")
+
+        else:
+            print("Could not retrieve bucket labels. Retrying...")
+
+        time.sleep(5)
+
+
+if __name__ == "__main__":
+    monitor_and_capture()
